@@ -20,6 +20,51 @@
   --r:18px;
 }
 
+.login-footer {
+      background: var(--card);
+      border-top: 1px solid var(--border);
+      padding: 1.25rem 2rem;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      flex-wrap: wrap;
+      gap: .75rem;
+    }
+ 
+    .login-footer .f-brand {
+      font-family: var(--sans);
+      font-weight: 700;
+      font-size: .95rem;
+      letter-spacing: -.02em;
+      color: var(--text);
+    }
+ 
+    .login-footer .f-brand span { color: var(--accent); }
+ 
+    .login-footer .f-meta {
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--muted);
+      display: flex;
+      align-items: center;
+      gap: 1.25rem;
+    }
+ 
+    .login-footer .f-dot {
+      width: 6px;
+      height: 6px;
+      border-radius: 50%;
+      background: var(--accent);
+      display: inline-block;
+      opacity: .6;
+    }
+ 
+    .login-footer .f-copy {
+      font-family: var(--mono);
+      font-size: .72rem;
+      color: var(--muted);
+    }
+
 *,
 *::before,
 *::after{

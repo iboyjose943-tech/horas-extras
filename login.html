@@ -1,0 +1,59 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Horas Extras — Login</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <link rel="stylesheet" href="styles1.css">
+</head>
+<body>
+
+<main class="login-main">
+  <div class="login-wrap">
+
+    <div class="login-brand">
+      <span class="brand-tag">▸ Tracker Personal</span>
+      <h1>Horas <span>Extras</span></h1>
+    </div>
+
+    <div class="login-card">
+      <h2>Bienvenido</h2>
+      <p class="sub">// Ingresa para ver tu planilla</p>
+
+      <div class="login-error" id="login-error">✕ Usuario o contraseña incorrectos.</div>
+
+      <div class="login-field">
+        <label for="usuario">Usuario</label>
+        <input type="text" id="usuario" placeholder="tu usuario" autocomplete="username"/>
+      </div>
+
+      <div class="login-field">
+        <label for="contrasena">Contraseña</label>
+        <div class="pw-wrap">
+          <input type="password" id="contrasena" placeholder="••••••••" autocomplete="current-password"/>
+          <button class="toggle-pw" onclick="togglePw()" type="button" title="Mostrar/ocultar">
+            <span id="pw-icon">👁</span>
+          </button>
+        </div>
+      </div>
+
+      <button class="btn-login" onclick="doLogin()">→ Entrar</button>
+    </div>
+
+  </div>
+</main>
+
+<footer class="login-footer">
+  <div class="f-brand">Horas <span>Extras</span></div>
+  <div class="f-meta">
+    <span><span class="f-dot"></span> Tracker Personal</span>
+    <span>José Emanuel Iboy Ordoñez</span>
+    <span>v1.0</span>
+  </div>
+  <div class="f-copy">© 2026 — Todos los derechos reservados</div>
+</footer>
+
+<script src="login.js"></script>
+</body>
+</html>
