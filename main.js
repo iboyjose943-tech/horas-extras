@@ -21,6 +21,16 @@ function cerrarSesion() {
   window.location.href = 'login.html';
 }
 
+// Devuelve la fecha de HOY en formato YYYY-MM-DD usando la hora LOCAL del dispositivo
+// (evita el bug de toISOString() que usa UTC y adelanta el día en Guatemala)
+function fechaLocalHoy() {
+  const d   = new Date();
+  const y   = d.getFullYear();
+  const m   = String(d.getMonth() + 1).padStart(2, '0');
+  const dia = String(d.getDate()).padStart(2, '0');
+  return `${y}-${m}-${dia}`;
+}
+
 const MESES_NOM = [
   "Enero","Febrero","Marzo","Abril","Mayo","Junio",
   "Julio","Agosto","Septiembre","Octubre","Noviembre","Diciembre"
@@ -120,7 +130,7 @@ function renderTabla() {
 
 function actualizarStats() {
   const filtro = document.getElementById('filtroMes').value;
-  const ahora  = new Date().toISOString().slice(0, 7);
+  const ahora  = fechaLocalHoy().slice(0, 7);
   const mesRef = filtro || ahora;
 
   const delMes   = registros.filter(r => r.fecha.startsWith(mesRef));
@@ -174,7 +184,7 @@ function calcularPlanilla() {
   const horasSimples = ds + ns + ms;
   const horasDobles  = dd + nd + md;
 
-  const hoy = new Date().toISOString().split('T')[0];
+  const hoy = fechaLocalHoy();
 
   const existe = registros.find(r => r.fecha === hoy);
   if (existe) {
