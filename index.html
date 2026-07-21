@@ -1,0 +1,121 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Horas Extras</title>
+  <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+  <link rel="stylesheet" href="styles.css">
+  <script src="main.js"></script>
+</head>
+<body>
+<div class="wrap">
+
+  <header>
+    <div class="brand">
+      <span class="brand-tag">▸ Tracker Personal</span>
+      <h1>Horas <span>Extras</span></h1>
+    </div>
+    <div class="month-selector">
+      <label style="font-size:.7rem;letter-spacing:.1em;text-transform:uppercase;color:var(--muted)">Filtrar mes</label>
+      <select id="filtroMes" onchange="renderTabla(); actualizarStats();">
+        <option value="">Todos</option>
+      </select>
+    </div>
+  </header>
+
+  <div class="stats">
+    <div class="stat c1">
+      <div class="stat-label">Total registros</div>
+      <div class="stat-value" id="s-total">0</div>
+      <div class="stat-sub">días registrados</div>
+    </div>
+    <div class="stat c2">
+      <div class="stat-label">Horas extras mes</div>
+      <div class="stat-value" id="s-mes">Q0</div>
+      <div class="stat-sub" id="s-mes-label">—</div>
+    </div>
+    <div class="stat c3">
+      <div class="stat-label">Promedio diario</div>
+      <div class="stat-value" id="s-prom">Q0</div>
+      <div class="stat-sub">extras/día</div>
+    </div>
+    <div class="stat c4">
+      <div class="stat-label">Total acumulado</div>
+      <div class="stat-value" id="s-acum">Q0</div>
+      <div class="stat-sub">todos los meses</div>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">🧮 Calculadora de Pago</div>
+    <div class="form-grid">
+      <div class="field">
+        <label>DS — Diurna Simple</label>
+        <input type="number" id="ds" value="0" min="0">
+      </div>
+      <div class="field">
+        <label>DD — Diurna Doble</label>
+        <input type="number" id="dd" value="0" min="0">
+      </div>
+      <div class="field">
+        <label>NS — Nocturna Simple</label>
+        <input type="number" id="ns" value="0" min="0">
+      </div>
+      <div class="field">
+        <label>ND — Nocturna Doble</label>
+        <input type="number" id="nd" value="0" min="0">
+      </div>
+      <div class="field">
+        <label>MS — Mixta Simple</label>
+        <input type="number" id="ms" value="0" min="0">
+      </div>
+      <div class="field">
+        <label>MD — Mixta Doble</label>
+        <input type="number" id="md" value="0" min="0">
+      </div>
+      <div class="field" style="align-self:end;">
+        <button class="btn btn-add" onclick="calcularPlanilla()">Calcular Pago</button>
+      </div>
+    </div>
+    <div id="resultadoPlanilla"></div>
+  </div>
+
+  <div class="card">
+    <div class="card-title">📋 Registros</div>
+    <div class="actions">
+      <button class="btn btn-clear" onclick="limpiarFiltro()">Quitar filtro</button>
+      <button class="btn btn-excel" onclick="exportarExcel()">⬇ Exportar Excel</button>
+    </div>
+    <div class="table-wrap">
+      <table>
+        <thead>
+          <tr>
+            <th>Fecha</th>
+            <th>H. Simples</th>
+            <th>H. Dobles</th>
+            <th>DS</th>
+            <th>DD</th>
+            <th>NS</th>
+            <th>ND</th>
+            <th>MS</th>
+            <th>MD</th>
+            <th>Total Extras</th>
+            <th>Total Pagar</th>
+            <th></th>
+          </tr>
+        </thead>
+        <tbody id="tbody">
+          <tr><td colspan="12" class="empty">No hay registros aún. Calcula tu primer pago arriba.</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast"></div>
+
+</body>
+</html>
