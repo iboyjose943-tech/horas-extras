@@ -337,6 +337,30 @@ function editarRegistro(fecha) {
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
+function editarRegistro(fecha) {
+  const r = registros.find(x => x.fecha === fecha);
+  if (!r) return;
+
+  document.getElementById('fechaAnterior').value = fecha;
+  document.getElementById('ds2').value = r.ds || 0;
+  document.getElementById('dd2').value = r.dd || 0;
+  document.getElementById('ns2').value = r.ns || 0;
+  document.getElementById('nd2').value = r.nd || 0;
+  document.getElementById('ms2').value = r.ms || 0;
+  document.getElementById('md2').value = r.md || 0;
+  document.getElementById('editandoFecha').value = fecha;
+
+  document.getElementById('btnGuardarAnterior').textContent = 'Guardar Cambios';
+  document.getElementById('btnCancelarEdicion').style.display = 'inline-block';
+
+  // Abre la tarjeta si estaba cerrada
+  document.getElementById('contenidoAnterior').style.display = 'block';
+  document.getElementById('iconoAnterior').textContent = '▾';
+
+  const card = document.getElementById('fechaAnterior').closest('.card');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
 function cancelarEdicion() {
   document.getElementById('editandoFecha').value = '';
   document.getElementById('fechaAnterior').value = '';
