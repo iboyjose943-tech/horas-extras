@@ -7,6 +7,12 @@
   <link href="https://fonts.googleapis.com/css2?family=Syne:wght@400;600;700;800&family=DM+Mono:wght@300;400;500&display=swap" rel="stylesheet"/>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
   <link rel="stylesheet" href="styles.css">
+
+  <!-- Firebase -->
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+  <script src="firebase-config.js"></script>
   <script src="main.js"></script>
 </head>
 <body>
@@ -23,7 +29,8 @@
         <option value="">Todos</option>
       </select>
     </div>
-    <button class="btn btn-logout" onclick="cerrarSesion()">Cerrar Sesisón</button>
+    <span id="admin-badge" style="display:none; background:#fef3c7; color:#92400e; padding:4px 10px; border-radius:999px; font-size:.7rem; font-weight:700; margin-right:10px;">👑 ADMIN</span>
+    <button class="btn btn-clear" onclick="cerrarSesion()">Cerrar Sesión</button>
   </header>
 
   <div class="stats">
@@ -50,82 +57,55 @@
   </div>
 
   <div class="card">
-    <div class="card-title">🧮 Calculadora de Pago</div>
-    <div class="form-grid">
-      <div class="field">
-        <label>DS — Diurna Simple</label>
-        <input type="number" id="ds" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>DD — Diurna Doble</label>
-        <input type="number" id="dd" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>NS — Nocturna Simple</label>
-        <input type="number" id="ns" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>ND — Nocturna Doble</label>
-        <input type="number" id="nd" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>MS — Mixta Simple</label>
-        <input type="number" id="ms" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>MD — Mixta Doble</label>
-        <input type="number" id="md" value="0" min="0">
-      </div>
-      <div class="field" style="align-self:end;">
-        <button class="btn btn-add" onclick="calcularPlanilla()">Calcular Pago</button>
-      </div>
+    <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleAnterior()">
+      <span>🗓️ Agregar Las Horas Extras</span>
+      <span id="iconoAnterior" style="font-size:1.2rem;">▸</span>
     </div>
-    <div id="resultadoPlanilla"></div>
-  </div>
+    <div id="contenidoAnterior" style="display:none; margin-top:15px;">
+      <div class="form-grid">
+        <div class="field">
+          <label>Fecha</label>
+          <input type="date" id="fechaAnterior">
+        </div>
 
- <div class="card">
-  <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleAnterior()">
-    <span>🗓️ Agregar Registro Anterior</span>
-    <span id="iconoAnterior" style="font-size:1.2rem;">▸</span>
-  </div>
-  <div id="contenidoAnterior" style="display:none; margin-top:15px;">
-    <div class="form-grid">
-      <div class="field">
-        <label>Fecha del registro</label>
-        <input type="date" id="fechaAnterior">
-      </div>
-      <div class="field">
-        <label>DS — Diurna Simple</label>
-        <input type="number" id="ds2" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>DD — Diurna Doble</label>
-        <input type="number" id="dd2" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>NS — Nocturna Simple</label>
-        <input type="number" id="ns2" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>ND — Nocturna Doble</label>
-        <input type="number" id="nd2" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>MS — Mixta Simple</label>
-        <input type="number" id="ms2" value="0" min="0">
-      </div>
-      <div class="field">
-        <label>MD — Mixta Doble</label>
-        <input type="number" id="md2" value="0" min="0">
-      </div>
-      <div class="field" style="align-self:end; display:flex; gap:10px;">
-        <input type="hidden" id="editandoFecha" value="">
-        <button class="btn btn-add" id="btnGuardarAnterior" onclick="agregarRegistroAnterior()">Guardar Registro</button>
-        <button class="btn btn-clear" id="btnCancelarEdicion" style="display:none;" onclick="cancelarEdicion()">Cancelar</button>
+        <div class="field" id="campoUsuarioObjetivo" style="display:none;">
+          <label>Guardar para el usuario</label>
+          <select id="usuarioObjetivo"></select>
+        </div>
+
+        <div class="field">
+          <label>DS — Diurna Simple</label>
+          <input type="number" id="ds2" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>DD — Diurna Doble</label>
+          <input type="number" id="dd2" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>NS — Nocturna Simple</label>
+          <input type="number" id="ns2" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>ND — Nocturna Doble</label>
+          <input type="number" id="nd2" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>MS — Mixta Simple</label>
+          <input type="number" id="ms2" value="0" min="0">
+        </div>
+        <div class="field">
+          <label>MD — Mixta Doble</label>
+          <input type="number" id="md2" value="0" min="0">
+        </div>
+        <div class="field" style="align-self:end; display:flex; gap:10px;">
+          <input type="hidden" id="editandoFecha" value="">
+          <input type="hidden" id="editandoUid" value="">
+          <button class="btn btn-add" id="btnGuardarAnterior" onclick="agregarRegistroAnterior()">Guardar Registro</button>
+          <button class="btn btn-clear" id="btnCancelarEdicion" style="display:none;" onclick="cancelarEdicion()">Cancelar</button>
+        </div>
       </div>
     </div>
   </div>
-</div>
 
   <div class="card">
     <div class="card-title">📋 Registros</div>
@@ -136,7 +116,7 @@
     <div class="table-wrap">
       <table>
         <thead>
-          <tr>
+          <tr id="tr-encabezado">
             <th>Fecha</th>
             <th>H. Simples</th>
             <th>H. Dobles</th>
@@ -152,7 +132,7 @@
           </tr>
         </thead>
         <tbody id="tbody">
-          <tr><td colspan="12" class="empty">No hay registros aún. Calcula tu primer pago arriba.</td></tr>
+          <tr><td colspan="12" class="empty">No hay registros aún. Agrega tu primer registro arriba.</td></tr>
         </tbody>
       </table>
     </div>

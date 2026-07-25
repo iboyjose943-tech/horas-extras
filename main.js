@@ -1,28 +1,13 @@
-(function protegerApp() {
-  const raw = localStorage.getItem('he_session');
-  if (!raw) { window.location.href = 'login.html'; return; }
-  try {
-    const sess = JSON.parse(raw);
-    const SESSION_HORAS = 8;
-    const expira = sess.ts + SESSION_HORAS * 60 * 60 * 1000;
-    if (SESSION_HORAS !== 0 && Date.now() > expira) {
-      localStorage.removeItem('he_session');
-      window.location.href = 'login.html';
-    }
-  } catch (e) {
-    localStorage.removeItem('he_session');
-    window.location.href = 'login.html';
-  }
-})();
+// ============ AUTENTICACIÓN Y ROLES ============
+let currentUser = null;
+let esAdmin = false;
 
 function cerrarSesion() {
   if (!confirm('¿Cerrar sesión?')) return;
-  localStorage.removeItem('he_session');
-  window.location.href = 'login.html';
+  auth.signOut().then(() => window.location.href = 'login.html');
 }
 
 // Devuelve la fecha de HOY en formato YYYY-MM-DD usando la hora LOCAL del dispositivo
-// (evita el bug de toISOString() que usa UTC y adelanta el día en Guatemala)
 function fechaLocalHoy() {
   const d   = new Date();
   const y   = d.getFullYear();
@@ -37,24 +22,20 @@ const MESES_NOM = [
 ];
 
 const SUELDO_BASE = 4300;
-const VALOR_HORA  = SUELDO_BASE / 30 / 8; // = 17.91
+const VALOR_HORA  = SUELDO_BASE / 30 / 8;
 
 const TARIFAS = {
-  ds: +(VALOR_HORA * 1.5).toFixed(4), // 26.87
-  dd: +(VALOR_HORA * 2).toFixed(4), // 35.83
-  ns: +(VALOR_HORA * 2).toFixed(4), //35.83
-  nd: +(VALOR_HORA * 2.6667).toFixed(4), //47.78
-  ms: +(VALOR_HORA * 1.7143).toFixed(4), //30.71
-  md: +(VALOR_HORA * 2.2857).toFixed(4), //40.95
+  ds: +(VALOR_HORA * 1.5).toFixed(4),
+  dd: +(VALOR_HORA * 2).toFixed(4),
+  ns: +(VALOR_HORA * 2).toFixed(4),
+  nd: +(VALOR_HORA * 2.6667).toFixed(4),
+  ms: +(VALOR_HORA * 1.7143).toFixed(4),
+  md: +(VALOR_HORA * 2.2857).toFixed(4),
 };
 
 let registros = [];
+let usuariosMap = {}; // uid -> email, para mostrar en la tabla si eres admin
 
-function esNativo() {
-  return window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
-}
-
-// Calcula horasSimples, horasDobles, extras y total a partir de las 6 horas
 function calcularTotales(ds, dd, ns, nd, ms, md) {
   const totalDS = ds * TARIFAS.ds;
   const totalDD = dd * TARIFAS.dd;
@@ -71,41 +52,90 @@ function calcularTotales(ds, dd, ns, nd, ms, md) {
   return { horasSimples, horasDobles, extras, total };
 }
 
-async function guardar() {
+// ============ CARGA INICIAL: SESIÓN, ROL Y REGISTROS EN TIEMPO REAL ============
+document.addEventListener('DOMContentLoaded', () => {
+  auth.onAuthStateChanged(async (user) => {
+    if (!user) { window.location.href = 'login.html'; return; }
+    currentUser = user;
+    await cargarRol();
+    await cargarUsuarios();
+    escucharRegistros();
+  });
+});
+
+async function cargarRol() {
   try {
-    if (esNativo()) {
-      await window.Capacitor.Plugins.Preferences.set({
-        key: 'horas_extras',
-        value: JSON.stringify(registros)
-      });
-    } else {
-      localStorage.setItem('horas_extras', JSON.stringify(registros));
-    }
-  } catch(e) {
-    localStorage.setItem('horas_extras', JSON.stringify(registros));
+    const doc = await db.collection('usuarios').doc(currentUser.uid).get();
+    esAdmin = doc.exists && doc.data().rol === 'admin';
+  } catch (e) {
+    esAdmin = false;
   }
-  actualizarFiltroMeses();
-  renderTabla();
-  actualizarStats();
+
+  const badge = document.getElementById('admin-badge');
+  if (badge) badge.style.display = esAdmin ? 'inline-block' : 'none';
+
+  const campoUsuario = document.getElementById('campoUsuarioObjetivo');
+  if (campoUsuario) campoUsuario.style.display = esAdmin ? 'block' : 'none';
+
+  // Agrega la columna "Usuario" al encabezado de la tabla si es admin
+  const encabezado = document.getElementById('tr-encabezado');
+  if (esAdmin && encabezado && !document.getElementById('th-usuario')) {
+    const th = document.createElement('th');
+    th.id = 'th-usuario';
+    th.textContent = 'Usuario';
+    encabezado.insertBefore(th, encabezado.firstChild);
+  }
 }
 
-async function iniciar() {
+// Carga la lista de usuarios (solo se usa si eres admin, para el selector y para mostrar nombres en la tabla)
+async function cargarUsuarios() {
   try {
-    if (esNativo()) {
-      const { value } = await window.Capacitor.Plugins.Preferences.get({ key: 'horas_extras' });
-      registros = JSON.parse(value || '[]');
-    } else {
-      registros = JSON.parse(localStorage.getItem('horas_extras') || '[]');
+    const snap = await db.collection('usuarios').get();
+    usuariosMap = {};
+    snap.forEach(doc => { usuariosMap[doc.id] = doc.data().email || doc.id; });
+
+    if (esAdmin) {
+      const sel = document.getElementById('usuarioObjetivo');
+      if (sel) {
+        sel.innerHTML = Object.entries(usuariosMap)
+          .map(([uid, email]) => `<option value="${uid}" ${uid === currentUser.uid ? 'selected' : ''}>${email}</option>`)
+          .join('');
+      }
     }
-  } catch(e) {
-    registros = JSON.parse(localStorage.getItem('horas_extras') || '[]');
+  } catch (e) {
+    // si falla, no es crítico
   }
-  document.getElementById('filtroMes').value = '';
-  actualizarFiltroMeses();
-  renderTabla();
-  actualizarStats();
 }
 
+// Escucha los registros en tiempo real. Admin ve todos, usuario normal solo los suyos.
+function escucharRegistros() {
+  let query = db.collection('registros');
+  if (!esAdmin) {
+    query = query.where('uid', '==', currentUser.uid);
+  }
+  query.onSnapshot(snapshot => {
+    registros = snapshot.docs.map(d => d.data());
+    registros.sort((a, b) => b.fecha.localeCompare(a.fecha));
+    actualizarFiltroMeses();
+    renderTabla();
+    actualizarStats();
+  }, err => {
+    toast('Error al cargar registros: ' + err.message, 'err');
+  });
+}
+
+// ============ GUARDAR / ELIMINAR EN FIRESTORE ============
+async function guardarRegistroFirestore(uid, registro) {
+  const id = `${uid}_${registro.fecha}`;
+  await db.collection('registros').doc(id).set({ ...registro, uid });
+}
+
+async function eliminarRegistroFirestore(uid, fecha) {
+  const id = `${uid}_${fecha}`;
+  await db.collection('registros').doc(id).delete();
+}
+
+// ============ UI: TABLA, FILTROS, ESTADÍSTICAS ============
 function actualizarFiltroMeses() {
   const sel    = document.getElementById('filtroMes');
   const actual = sel.value;
@@ -122,13 +152,16 @@ function renderTabla() {
   const filtro = document.getElementById('filtroMes').value;
   const datos  = filtro ? registros.filter(r => r.fecha.startsWith(filtro)) : registros;
 
+  const colspan = esAdmin ? 13 : 12;
+
   if (datos.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="12" class="empty">No hay registros para mostrar.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="${colspan}" class="empty">No hay registros para mostrar.</td></tr>`;
     return;
   }
 
   tbody.innerHTML = datos.map(r => `
     <tr>
+      ${esAdmin ? `<td>${usuariosMap[r.uid] || r.uid}</td>` : ''}
       <td>${r.fecha}</td>
       <td>${r.horasSimples || 0}</td>
       <td>${r.horasDobles  || 0}</td>
@@ -141,8 +174,8 @@ function renderTabla() {
       <td>Q${Number(r.extras || 0).toFixed(2)}</td>
       <td>Q${Number(r.total  || 0).toFixed(2)}</td>
       <td>
-        <button class="btn-edit" onclick="editarRegistro('${r.fecha}')">✎</button>
-        <button class="btn-del" onclick="eliminar('${r.fecha}')">✕</button>
+        <button class="btn-edit" onclick="editarRegistro('${r.uid}', '${r.fecha}')">✎</button>
+        <button class="btn-del" onclick="eliminar('${r.uid}', '${r.fecha}')">✕</button>
       </td>
     </tr>
   `).join('');
@@ -166,11 +199,14 @@ function actualizarStats() {
   document.getElementById('s-acum').textContent      = `Q${extAcum.toFixed(2)}`;
 }
 
-function eliminar(fecha) {
+async function eliminar(uid, fecha) {
   if (!confirm(`¿Eliminar el registro del ${fecha}?`)) return;
-  registros = registros.filter(r => r.fecha !== fecha);
-  guardar();
-  toast('Registro eliminado.', 'ok');
+  try {
+    await eliminarRegistroFirestore(uid, fecha);
+    toast('Registro eliminado.', 'ok');
+  } catch (e) {
+    toast('Error al eliminar: ' + e.message, 'err');
+  }
 }
 
 function limpiarFiltro() {
@@ -179,8 +215,8 @@ function limpiarFiltro() {
   actualizarStats();
 }
 
-// Calculadora rápida para el día de HOY. Si ya existe registro de hoy, SUMA las horas.
-function calcularPlanilla() {
+// ============ CALCULADORA RÁPIDA (HOY) ============
+async function calcularPlanilla() {
   const ds = Number(document.getElementById('ds').value) || 0;
   const dd = Number(document.getElementById('dd').value) || 0;
   const ns = Number(document.getElementById('ns').value) || 0;
@@ -194,33 +230,28 @@ function calcularPlanilla() {
   }
 
   const hoy = fechaLocalHoy();
-  let existe = registros.find(r => r.fecha === hoy);
+  const existe = registros.find(r => r.fecha === hoy && r.uid === currentUser.uid);
 
-  let dsF = ds, ddF = dd, nsF = ns, ndF = nd, msF = ms, mdF = md;
+  const dsF = (existe?.ds || 0) + ds;
+  const ddF = (existe?.dd || 0) + dd;
+  const nsF = (existe?.ns || 0) + ns;
+  const ndF = (existe?.nd || 0) + nd;
+  const msF = (existe?.ms || 0) + ms;
+  const mdF = (existe?.md || 0) + md;
 
-  if (existe) {
-    dsF = (existe.ds || 0) + ds;
-    ddF = (existe.dd || 0) + dd;
-    nsF = (existe.ns || 0) + ns;
-    ndF = (existe.nd || 0) + nd;
-    msF = (existe.ms || 0) + ms;
-    mdF = (existe.md || 0) + md;
-    const totales = calcularTotales(dsF, ddF, nsF, ndF, msF, mdF);
-    Object.assign(existe, { ds: dsF, dd: ddF, ns: nsF, nd: ndF, ms: msF, md: mdF, ...totales });
-    toast('Horas sumadas al registro de hoy ✓', 'ok');
-  } else {
-    const totales = calcularTotales(ds, dd, ns, nd, ms, md);
-    registros.push({ fecha: hoy, ds, dd, ns, nd, ms, md, ...totales, sueldoBase: SUELDO_BASE });
-    toast('Registro guardado ✓', 'ok');
+  const totales = calcularTotales(dsF, ddF, nsF, ndF, msF, mdF);
+  const registro = { fecha: hoy, ds: dsF, dd: ddF, ns: nsF, nd: ndF, ms: msF, md: mdF, ...totales, sueldoBase: SUELDO_BASE };
+
+  try {
+    await guardarRegistroFirestore(currentUser.uid, registro);
+    toast(existe ? 'Horas sumadas al registro de hoy ✓' : 'Registro guardado ✓', 'ok');
+  } catch (e) {
+    toast('Error al guardar: ' + e.message, 'err');
+    return;
   }
 
-  registros.sort((a, b) => b.fecha.localeCompare(a.fecha));
-  guardar();
-
-  // Limpia los campos de la calculadora rápida
   ['ds','dd','ns','nd','ms','md'].forEach(id => document.getElementById(id).value = 0);
 
-  // Muestra en el resumen el TOTAL acumulado del día (no solo lo recién ingresado)
   const totalDS = dsF * TARIFAS.ds;
   const totalDD = ddF * TARIFAS.dd;
   const totalNS = nsF * TARIFAS.ns;
@@ -250,16 +281,18 @@ function calcularPlanilla() {
   `;
 }
 
-// Agregar/editar un registro de una fecha específica (pasada o presente).
-// Si NO se está editando y ya existe registro para esa fecha, SUMA las horas.
-// Si SÍ se está editando (viene de "Editar" en la tabla), REEMPLAZA el registro completo.
-function agregarRegistroAnterior() {
-  const fecha = document.getElementById('fechaAnterior').value;
+// ============ AGREGAR / EDITAR REGISTRO DE CUALQUIER FECHA ============
+function toggleAnterior() {
+  const contenido = document.getElementById('contenidoAnterior');
+  const icono = document.getElementById('iconoAnterior');
+  const abierto = contenido.style.display !== 'none';
+  contenido.style.display = abierto ? 'none' : 'block';
+  icono.textContent = abierto ? '▸' : '▾';
+}
 
-  if (!fecha) {
-    toast('Selecciona una fecha.', 'err');
-    return;
-  }
+async function agregarRegistroAnterior() {
+  const fecha = document.getElementById('fechaAnterior').value;
+  if (!fecha) { toast('Selecciona una fecha.', 'err'); return; }
 
   const ds = Number(document.getElementById('ds2').value) || 0;
   const dd = Number(document.getElementById('dd2').value) || 0;
@@ -268,57 +301,48 @@ function agregarRegistroAnterior() {
   const ms = Number(document.getElementById('ms2').value) || 0;
   const md = Number(document.getElementById('md2').value) || 0;
 
-  if (ds + dd + ns + nd + ms + md === 0) {
-    toast('Ingresa al menos una hora.', 'err');
+  if (ds + dd + ns + nd + ms + md === 0) { toast('Ingresa al menos una hora.', 'err'); return; }
+
+  const editandoFecha = document.getElementById('editandoFecha').value;
+  const editandoUid   = document.getElementById('editandoUid').value;
+
+  const selUsuario = document.getElementById('usuarioObjetivo');
+  const targetUid  = editandoUid || (esAdmin && selUsuario ? selUsuario.value : currentUser.uid);
+
+  try {
+    if (editandoFecha) {
+      // MODO EDICIÓN: reemplaza el registro completo
+      if (editandoFecha !== fecha) {
+        await eliminarRegistroFirestore(targetUid, editandoFecha);
+      }
+      const totales = calcularTotales(ds, dd, ns, nd, ms, md);
+      await guardarRegistroFirestore(targetUid, { fecha, ds, dd, ns, nd, ms, md, ...totales, sueldoBase: SUELDO_BASE });
+      toast('Registro editado ✓', 'ok');
+      cancelarEdicion();
+    } else {
+      // MODO AGREGAR: si ya existe, suma las horas
+      const existe = registros.find(r => r.fecha === fecha && r.uid === targetUid);
+      const dsF = (existe?.ds || 0) + ds;
+      const ddF = (existe?.dd || 0) + dd;
+      const nsF = (existe?.ns || 0) + ns;
+      const ndF = (existe?.nd || 0) + nd;
+      const msF = (existe?.ms || 0) + ms;
+      const mdF = (existe?.md || 0) + md;
+      const totales = calcularTotales(dsF, ddF, nsF, ndF, msF, mdF);
+      await guardarRegistroFirestore(targetUid, { fecha, ds: dsF, dd: ddF, ns: nsF, nd: ndF, ms: msF, md: mdF, ...totales, sueldoBase: SUELDO_BASE });
+      toast(existe ? 'Horas sumadas al registro existente ✓' : 'Registro anterior guardado ✓', 'ok');
+      document.getElementById('fechaAnterior').value = '';
+    }
+  } catch (e) {
+    toast('Error al guardar: ' + e.message, 'err');
     return;
   }
 
-  const editando = document.getElementById('editandoFecha').value;
-
-  if (editando) {
-    // MODO EDICIÓN: reemplaza el registro completo (no suma)
-    if (editando !== fecha) {
-      // El usuario también cambió la fecha: elimina el registro viejo
-      registros = registros.filter(r => r.fecha !== editando);
-    }
-    let existe = registros.find(r => r.fecha === fecha);
-    const totales = calcularTotales(ds, dd, ns, nd, ms, md);
-    if (existe) {
-      Object.assign(existe, { ds, dd, ns, nd, ms, md, ...totales });
-    } else {
-      registros.push({ fecha, ds, dd, ns, nd, ms, md, ...totales, sueldoBase: SUELDO_BASE });
-    }
-    toast('Registro editado ✓', 'ok');
-    cancelarEdicion();
-  } else {
-    // MODO AGREGAR: si ya existe, SUMA las horas al registro existente
-    const existe = registros.find(r => r.fecha === fecha);
-    if (existe) {
-      const dsF = (existe.ds || 0) + ds;
-      const ddF = (existe.dd || 0) + dd;
-      const nsF = (existe.ns || 0) + ns;
-      const ndF = (existe.nd || 0) + nd;
-      const msF = (existe.ms || 0) + ms;
-      const mdF = (existe.md || 0) + md;
-      const totales = calcularTotales(dsF, ddF, nsF, ndF, msF, mdF);
-      Object.assign(existe, { ds: dsF, dd: ddF, ns: nsF, nd: ndF, ms: msF, md: mdF, ...totales });
-      toast('Horas sumadas al registro existente ✓', 'ok');
-    } else {
-      const totales = calcularTotales(ds, dd, ns, nd, ms, md);
-      registros.push({ fecha, ds, dd, ns, nd, ms, md, ...totales, sueldoBase: SUELDO_BASE });
-      toast('Registro anterior guardado ✓', 'ok');
-    }
-    document.getElementById('fechaAnterior').value = '';
-  }
-
   ['ds2','dd2','ns2','nd2','ms2','md2'].forEach(id => document.getElementById(id).value = 0);
-  registros.sort((a, b) => b.fecha.localeCompare(a.fecha));
-  guardar();
 }
 
-// Carga un registro existente en el formulario "Agregar Registro Anterior" para corregirlo
-function editarRegistro(fecha) {
-  const r = registros.find(x => x.fecha === fecha);
+function editarRegistro(uid, fecha) {
+  const r = registros.find(x => x.fecha === fecha && x.uid === uid);
   if (!r) return;
 
   document.getElementById('fechaAnterior').value = fecha;
@@ -329,35 +353,33 @@ function editarRegistro(fecha) {
   document.getElementById('ms2').value = r.ms || 0;
   document.getElementById('md2').value = r.md || 0;
   document.getElementById('editandoFecha').value = fecha;
+  document.getElementById('editandoUid').value = uid;
 
   document.getElementById('btnGuardarAnterior').textContent = 'Guardar Cambios';
   document.getElementById('btnCancelarEdicion').style.display = 'inline-block';
+
+  document.getElementById('contenidoAnterior').style.display = 'block';
+  document.getElementById('iconoAnterior').textContent = '▾';
 
   const card = document.getElementById('fechaAnterior').closest('.card');
   if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
 }
 
-function toggleAnterior() {
-  const contenido = document.getElementById('contenidoAnterior');
-  const icono = document.getElementById('iconoAnterior');
-  const abierto = contenido.style.display !== 'none';
-
-  contenido.style.display = abierto ? 'none' : 'block';
-  icono.textContent = abierto ? '▸' : '▾';
-}
-
 function cancelarEdicion() {
   document.getElementById('editandoFecha').value = '';
+  document.getElementById('editandoUid').value = '';
   document.getElementById('fechaAnterior').value = '';
   ['ds2','dd2','ns2','nd2','ms2','md2'].forEach(id => document.getElementById(id).value = 0);
   document.getElementById('btnGuardarAnterior').textContent = 'Guardar Registro';
   document.getElementById('btnCancelarEdicion').style.display = 'none';
 }
 
+// ============ EXPORTAR EXCEL ============
 async function exportarExcel() {
   if (registros.length === 0) { toast('No hay registros para exportar.', 'err'); return; }
 
   const datos = registros.map(r => ({
+    Usuario:       esAdmin ? (usuariosMap[r.uid] || r.uid) : undefined,
     Fecha:         r.fecha,
     Horas_Simples: r.horasSimples || 0,
     Horas_Dobles:  r.horasDobles  || 0,
@@ -371,25 +393,8 @@ async function exportarExcel() {
   const ws = XLSX.utils.json_to_sheet(datos);
   const wb = XLSX.utils.book_new();
   XLSX.utils.book_append_sheet(wb, ws, 'Planilla');
-
-  if (!esNativo()) {
-    XLSX.writeFile(wb, 'Planilla_Horas_Extras.xlsx');
-    toast('Excel exportado ✓', 'ok');
-    return;
-  }
-
-  try {
-    const wbout = XLSX.write(wb, { bookType: 'xlsx', type: 'base64' });
-    await window.Capacitor.Plugins.Filesystem.writeFile({
-      path: 'Planilla_Horas_Extras.xlsx',
-      data: wbout,
-      directory: 'DOCUMENTS',
-      recursive: true
-    });
-    toast('Excel guardado en Documentos ✓', 'ok');
-  } catch(e) {
-    toast('Error al guardar: ' + e.message, 'err');
-  }
+  XLSX.writeFile(wb, 'Planilla_Horas_Extras.xlsx');
+  toast('Excel exportado ✓', 'ok');
 }
 
 function toast(msg, tipo) {
@@ -398,5 +403,3 @@ function toast(msg, tipo) {
   t.className   = `show ${tipo}`;
   setTimeout(() => t.className = '', 3000);
 }
-
-document.addEventListener('DOMContentLoaded', () => iniciar());
