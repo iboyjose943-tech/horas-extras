@@ -54,6 +54,23 @@ function esNativo() {
   return window.Capacitor && window.Capacitor.isNativePlatform && window.Capacitor.isNativePlatform();
 }
 
+// Calcula horasSimples, horasDobles, extras y total a partir de las 6 horas
+function calcularTotales(ds, dd, ns, nd, ms, md) {
+  const totalDS = ds * TARIFAS.ds;
+  const totalDD = dd * TARIFAS.dd;
+  const totalNS = ns * TARIFAS.ns;
+  const totalND = nd * TARIFAS.nd;
+  const totalMS = ms * TARIFAS.ms;
+  const totalMD = md * TARIFAS.md;
+
+  const extras = totalDS + totalDD + totalNS + totalND + totalMS + totalMD;
+  const total  = SUELDO_BASE + extras;
+  const horasSimples = ds + ns + ms;
+  const horasDobles  = dd + nd + md;
+
+  return { horasSimples, horasDobles, extras, total };
+}
+
 async function guardar() {
   try {
     if (esNativo()) {
@@ -123,7 +140,10 @@ function renderTabla() {
       <td>${r.md || 0}</td>
       <td>Q${Number(r.extras || 0).toFixed(2)}</td>
       <td>Q${Number(r.total  || 0).toFixed(2)}</td>
-      <td><button class="btn-del" onclick="eliminar('${r.fecha}')">✕</button></td>
+      <td>
+        <button class="btn-edit" onclick="editarRegistro('${r.fecha}')">✎</button>
+        <button class="btn-del" onclick="eliminar('${r.fecha}')">✕</button>
+      </td>
     </tr>
   `).join('');
 }
@@ -159,6 +179,7 @@ function limpiarFiltro() {
   actualizarStats();
 }
 
+// Calculadora rápida para el día de HOY. Si ya existe registro de hoy, SUMA las horas.
 function calcularPlanilla() {
   const ds = Number(document.getElementById('ds').value) || 0;
   const dd = Number(document.getElementById('dd').value) || 0;
@@ -172,50 +193,153 @@ function calcularPlanilla() {
     return;
   }
 
-  const totalDS = ds * TARIFAS.ds;
-  const totalDD = dd * TARIFAS.dd;
-  const totalNS = ns * TARIFAS.ns;
-  const totalND = nd * TARIFAS.nd;
-  const totalMS = ms * TARIFAS.ms;
-  const totalMD = md * TARIFAS.md;
-
-  const totalExtras  = totalDS + totalDD + totalNS + totalND + totalMS + totalMD;
-  const totalPagar   = SUELDO_BASE + totalExtras;
-  const horasSimples = ds + ns + ms;
-  const horasDobles  = dd + nd + md;
-
   const hoy = fechaLocalHoy();
+  let existe = registros.find(r => r.fecha === hoy);
 
-  const existe = registros.find(r => r.fecha === hoy);
+  let dsF = ds, ddF = dd, nsF = ns, ndF = nd, msF = ms, mdF = md;
+
   if (existe) {
-    Object.assign(existe, { horasSimples, horasDobles, ds, dd, ns, nd, ms, md, extras: totalExtras, total: totalPagar });
-    toast('Registro del día actualizado ✓', 'ok');
+    dsF = (existe.ds || 0) + ds;
+    ddF = (existe.dd || 0) + dd;
+    nsF = (existe.ns || 0) + ns;
+    ndF = (existe.nd || 0) + nd;
+    msF = (existe.ms || 0) + ms;
+    mdF = (existe.md || 0) + md;
+    const totales = calcularTotales(dsF, ddF, nsF, ndF, msF, mdF);
+    Object.assign(existe, { ds: dsF, dd: ddF, ns: nsF, nd: ndF, ms: msF, md: mdF, ...totales });
+    toast('Horas sumadas al registro de hoy ✓', 'ok');
   } else {
-    registros.push({ fecha: hoy, horasSimples, horasDobles, ds, dd, ns, nd, ms, md, extras: totalExtras, total: totalPagar, sueldoBase: SUELDO_BASE });
+    const totales = calcularTotales(ds, dd, ns, nd, ms, md);
+    registros.push({ fecha: hoy, ds, dd, ns, nd, ms, md, ...totales, sueldoBase: SUELDO_BASE });
     toast('Registro guardado ✓', 'ok');
   }
 
   registros.sort((a, b) => b.fecha.localeCompare(a.fecha));
   guardar();
 
+  // Muestra en el resumen el TOTAL acumulado del día (no solo lo recién ingresado)
+  const totalDS = dsF * TARIFAS.ds;
+  const totalDD = ddF * TARIFAS.dd;
+  const totalNS = nsF * TARIFAS.ns;
+  const totalND = ndF * TARIFAS.nd;
+  const totalMS = msF * TARIFAS.ms;
+  const totalMD = mdF * TARIFAS.md;
+  const totalExtras = totalDS + totalDD + totalNS + totalND + totalMS + totalMD;
+  const totalPagar  = SUELDO_BASE + totalExtras;
+
   document.getElementById('resultadoPlanilla').innerHTML = `
     <table style="width:100%;border-collapse:collapse;margin-top:1.25rem;">
       <thead>
-        <tr><th>Tipo</th><th>Tarifa/h</th><th>Horas</th><th>Total</th></tr>
+        <tr><th>Tipo</th><th>Tarifa/h</th><th>Horas (acumuladas hoy)</th><th>Total</th></tr>
       </thead>
       <tbody>
-        <tr><td>DS</td><td>Q${TARIFAS.ds.toFixed(2)}</td><td>${ds}</td><td>Q${totalDS.toFixed(2)}</td></tr>
-        <tr><td>DD</td><td>Q${TARIFAS.dd.toFixed(2)}</td><td>${dd}</td><td>Q${totalDD.toFixed(2)}</td></tr>
-        <tr><td>NS</td><td>Q${TARIFAS.ns.toFixed(2)}</td><td>${ns}</td><td>Q${totalNS.toFixed(2)}</td></tr>
-        <tr><td>ND</td><td>Q${TARIFAS.nd.toFixed(2)}</td><td>${nd}</td><td>Q${totalND.toFixed(2)}</td></tr>
-        <tr><td>MS</td><td>Q${TARIFAS.ms.toFixed(2)}</td><td>${ms}</td><td>Q${totalMS.toFixed(2)}</td></tr>
-        <tr><td>MD</td><td>Q${TARIFAS.md.toFixed(2)}</td><td>${md}</td><td>Q${totalMD.toFixed(2)}</td></tr>
+        <tr><td>DS</td><td>Q${TARIFAS.ds.toFixed(2)}</td><td>${dsF}</td><td>Q${totalDS.toFixed(2)}</td></tr>
+        <tr><td>DD</td><td>Q${TARIFAS.dd.toFixed(2)}</td><td>${ddF}</td><td>Q${totalDD.toFixed(2)}</td></tr>
+        <tr><td>NS</td><td>Q${TARIFAS.ns.toFixed(2)}</td><td>${nsF}</td><td>Q${totalNS.toFixed(2)}</td></tr>
+        <tr><td>ND</td><td>Q${TARIFAS.nd.toFixed(2)}</td><td>${ndF}</td><td>Q${totalND.toFixed(2)}</td></tr>
+        <tr><td>MS</td><td>Q${TARIFAS.ms.toFixed(2)}</td><td>${msF}</td><td>Q${totalMS.toFixed(2)}</td></tr>
+        <tr><td>MD</td><td>Q${TARIFAS.md.toFixed(2)}</td><td>${mdF}</td><td>Q${totalMD.toFixed(2)}</td></tr>
         <tr><td colspan="3"><strong>Total Horas Extras</strong></td><td><strong>Q${totalExtras.toFixed(2)}</strong></td></tr>
         <tr><td colspan="3"><strong>Sueldo Base</strong></td><td><strong>Q${SUELDO_BASE.toFixed(2)}</strong></td></tr>
         <tr><td colspan="3"><strong>Total a Pagar</strong></td><td><strong style="color:#16a34a;font-size:1.1rem;">Q${totalPagar.toFixed(2)}</strong></td></tr>
       </tbody>
     </table>
   `;
+}
+
+// Agregar/editar un registro de una fecha específica (pasada o presente).
+// Si NO se está editando y ya existe registro para esa fecha, SUMA las horas.
+// Si SÍ se está editando (viene de "Editar" en la tabla), REEMPLAZA el registro completo.
+function agregarRegistroAnterior() {
+  const fecha = document.getElementById('fechaAnterior').value;
+
+  if (!fecha) {
+    toast('Selecciona una fecha.', 'err');
+    return;
+  }
+
+  const ds = Number(document.getElementById('ds2').value) || 0;
+  const dd = Number(document.getElementById('dd2').value) || 0;
+  const ns = Number(document.getElementById('ns2').value) || 0;
+  const nd = Number(document.getElementById('nd2').value) || 0;
+  const ms = Number(document.getElementById('ms2').value) || 0;
+  const md = Number(document.getElementById('md2').value) || 0;
+
+  if (ds + dd + ns + nd + ms + md === 0) {
+    toast('Ingresa al menos una hora.', 'err');
+    return;
+  }
+
+  const editando = document.getElementById('editandoFecha').value;
+
+  if (editando) {
+    // MODO EDICIÓN: reemplaza el registro completo (no suma)
+    if (editando !== fecha) {
+      // El usuario también cambió la fecha: elimina el registro viejo
+      registros = registros.filter(r => r.fecha !== editando);
+    }
+    let existe = registros.find(r => r.fecha === fecha);
+    const totales = calcularTotales(ds, dd, ns, nd, ms, md);
+    if (existe) {
+      Object.assign(existe, { ds, dd, ns, nd, ms, md, ...totales });
+    } else {
+      registros.push({ fecha, ds, dd, ns, nd, ms, md, ...totales, sueldoBase: SUELDO_BASE });
+    }
+    toast('Registro editado ✓', 'ok');
+    cancelarEdicion();
+  } else {
+    // MODO AGREGAR: si ya existe, SUMA las horas al registro existente
+    const existe = registros.find(r => r.fecha === fecha);
+    if (existe) {
+      const dsF = (existe.ds || 0) + ds;
+      const ddF = (existe.dd || 0) + dd;
+      const nsF = (existe.ns || 0) + ns;
+      const ndF = (existe.nd || 0) + nd;
+      const msF = (existe.ms || 0) + ms;
+      const mdF = (existe.md || 0) + md;
+      const totales = calcularTotales(dsF, ddF, nsF, ndF, msF, mdF);
+      Object.assign(existe, { ds: dsF, dd: ddF, ns: nsF, nd: ndF, ms: msF, md: mdF, ...totales });
+      toast('Horas sumadas al registro existente ✓', 'ok');
+    } else {
+      const totales = calcularTotales(ds, dd, ns, nd, ms, md);
+      registros.push({ fecha, ds, dd, ns, nd, ms, md, ...totales, sueldoBase: SUELDO_BASE });
+      toast('Registro anterior guardado ✓', 'ok');
+    }
+    document.getElementById('fechaAnterior').value = '';
+  }
+
+  ['ds2','dd2','ns2','nd2','ms2','md2'].forEach(id => document.getElementById(id).value = 0);
+  registros.sort((a, b) => b.fecha.localeCompare(a.fecha));
+  guardar();
+}
+
+// Carga un registro existente en el formulario "Agregar Registro Anterior" para corregirlo
+function editarRegistro(fecha) {
+  const r = registros.find(x => x.fecha === fecha);
+  if (!r) return;
+
+  document.getElementById('fechaAnterior').value = fecha;
+  document.getElementById('ds2').value = r.ds || 0;
+  document.getElementById('dd2').value = r.dd || 0;
+  document.getElementById('ns2').value = r.ns || 0;
+  document.getElementById('nd2').value = r.nd || 0;
+  document.getElementById('ms2').value = r.ms || 0;
+  document.getElementById('md2').value = r.md || 0;
+  document.getElementById('editandoFecha').value = fecha;
+
+  document.getElementById('btnGuardarAnterior').textContent = 'Guardar Cambios';
+  document.getElementById('btnCancelarEdicion').style.display = 'inline-block';
+
+  const card = document.getElementById('fechaAnterior').closest('.card');
+  if (card) card.scrollIntoView({ behavior: 'smooth', block: 'center' });
+}
+
+function cancelarEdicion() {
+  document.getElementById('editandoFecha').value = '';
+  document.getElementById('fechaAnterior').value = '';
+  ['ds2','dd2','ns2','nd2','ms2','md2'].forEach(id => document.getElementById(id).value = 0);
+  document.getElementById('btnGuardarAnterior').textContent = 'Guardar Registro';
+  document.getElementById('btnCancelarEdicion').style.display = 'none';
 }
 
 async function exportarExcel() {

@@ -446,3 +446,14 @@ tbody tr:hover{
 #resultadoPlanilla tr:last-child{
     font-size:16px;
 }
+.btn-edit{
+  background:#dbeafe;
+  color:#1d4ed8;
+  border:none;
+  border-radius:10px;
+  padding:6px 10px;
+  margin-right:6px;
+}
+.btn-edit:hover{
+  background:#bfdbfe;
+}
