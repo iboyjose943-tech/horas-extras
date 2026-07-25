@@ -217,6 +217,9 @@ function calcularPlanilla() {
   registros.sort((a, b) => b.fecha.localeCompare(a.fecha));
   guardar();
 
+  // Limpia los campos de la calculadora rápida
+  ['ds','dd','ns','nd','ms','md'].forEach(id => document.getElementById(id).value = 0);
+
   // Muestra en el resumen el TOTAL acumulado del día (no solo lo recién ingresado)
   const totalDS = dsF * TARIFAS.ds;
   const totalDD = ddF * TARIFAS.dd;
