@@ -25,8 +25,8 @@
       <div class="login-error" id="login-error">✕ Usuario o contraseña incorrectos.</div>
 
       <div class="login-field">
-        <label for="usuario">Usuario</label>
-        <input type="text" id="usuario" placeholder="tu usuario" autocomplete="username"/>
+        <label for="usuario">Correo electrónico</label>
+        <input type="email" id="usuario" placeholder="tu@correo.com" autocomplete="username"/>
       </div>
 
       <div class="login-field">
@@ -55,6 +55,10 @@
   <div class="f-copy">© 2026 — Todos los derechos reservados</div>
 </footer>
 
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-firestore-compat.js"></script>
+<script src="firebase-config.js"></script>
 <script src="login.js"></script>
 </body>
 </html>
