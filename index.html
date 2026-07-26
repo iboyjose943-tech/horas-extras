@@ -56,6 +56,48 @@
     </div>
   </div>
 
+  <div class="card" id="panel-admin" style="display:none;">
+    <div class="card-title">🛠️ Panel de Administrador</div>
+
+    <h3 style="margin-top:15px;margin-bottom:10px;font-size:.85rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Crear nuevo usuario</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label>Correo electrónico</label>
+        <input type="email" id="nuevoUsuarioEmail" placeholder="correo@ejemplo.com">
+      </div>
+      <div class="field">
+        <label>Contraseña</label>
+        <input type="password" id="nuevoUsuarioPass" placeholder="mínimo 6 caracteres">
+      </div>
+      <div class="field">
+        <label>Rol</label>
+        <select id="nuevoUsuarioRol">
+          <option value="user">Usuario</option>
+          <option value="admin">Administrador</option>
+        </select>
+      </div>
+      <div class="field" style="align-self:end;">
+        <button class="btn btn-add" onclick="crearUsuarioAdmin()">Crear Usuario</button>
+      </div>
+    </div>
+
+    <h3 style="margin-top:30px;margin-bottom:10px;font-size:.85rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Usuarios registrados</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Correo</th><th>Rol</th><th></th></tr></thead>
+        <tbody id="tbody-usuarios"></tbody>
+      </table>
+    </div>
+
+    <h3 style="margin-top:30px;margin-bottom:10px;font-size:.85rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Resumen por usuario</h3>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>Correo</th><th>Horas extras (mes)</th><th>Horas extras (total)</th></tr></thead>
+        <tbody id="tbody-resumen"></tbody>
+      </table>
+    </div>
+  </div>
+
   <div class="card">
     <div class="card-title" style="display:flex; justify-content:space-between; align-items:center; cursor:pointer;" onclick="toggleAnterior()">
       <span>🗓️ Agregar Las Horas Extras</span>

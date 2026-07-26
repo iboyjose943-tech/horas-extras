@@ -87,24 +87,31 @@ async function cargarRol() {
   }
 }
 
-// Carga la lista de usuarios (solo se usa si eres admin, para el selector y para mostrar nombres en la tabla)
+// Carga la lista de usuarios (email + rol). Se usa para el selector, la tabla y el panel de admin.
 async function cargarUsuarios() {
   try {
     const snap = await db.collection('usuarios').get();
     usuariosMap = {};
-    snap.forEach(doc => { usuariosMap[doc.id] = doc.data().email || doc.id; });
+    snap.forEach(doc => {
+      const d = doc.data();
+      usuariosMap[doc.id] = { email: d.email || doc.id, rol: d.rol || 'user' };
+    });
 
     if (esAdmin) {
       const sel = document.getElementById('usuarioObjetivo');
       if (sel) {
         sel.innerHTML = Object.entries(usuariosMap)
-          .map(([uid, email]) => `<option value="${uid}" ${uid === currentUser.uid ? 'selected' : ''}>${email}</option>`)
+          .map(([uid, u]) => `<option value="${uid}" ${uid === currentUser.uid ? 'selected' : ''}>${u.email}</option>`)
           .join('');
       }
+      renderPanelAdmin();
     }
   } catch (e) {
     // si falla, no es crítico
   }
+
+  const panel = document.getElementById('panel-admin');
+  if (panel) panel.style.display = esAdmin ? 'block' : 'none';
 }
 
 // Escucha los registros en tiempo real. Admin ve todos, usuario normal solo los suyos.
@@ -119,6 +126,7 @@ function escucharRegistros() {
     actualizarFiltroMeses();
     renderTabla();
     actualizarStats();
+    if (esAdmin) renderPanelAdmin();
   }, err => {
     toast('Error al cargar registros: ' + err.message, 'err');
   });
@@ -161,7 +169,7 @@ function renderTabla() {
 
   tbody.innerHTML = datos.map(r => `
     <tr>
-      ${esAdmin ? `<td>${usuariosMap[r.uid] || r.uid}</td>` : ''}
+      ${esAdmin ? `<td>${usuariosMap[r.uid]?.email || r.uid}</td>` : ''}
       <td>${r.fecha}</td>
       <td>${r.horasSimples || 0}</td>
       <td>${r.horasDobles  || 0}</td>
@@ -379,7 +387,7 @@ async function exportarExcel() {
   if (registros.length === 0) { toast('No hay registros para exportar.', 'err'); return; }
 
   const datos = registros.map(r => ({
-    Usuario:       esAdmin ? (usuariosMap[r.uid] || r.uid) : undefined,
+    Usuario:       esAdmin ? (usuariosMap[r.uid]?.email || r.uid) : undefined,
     Fecha:         r.fecha,
     Horas_Simples: r.horasSimples || 0,
     Horas_Dobles:  r.horasDobles  || 0,
@@ -402,4 +410,97 @@ function toast(msg, tipo) {
   t.textContent = msg;
   t.className   = `show ${tipo}`;
   setTimeout(() => t.className = '', 3000);
+}
+
+// ============ PANEL DE ADMINISTRADOR ============
+
+function renderPanelAdmin() {
+  if (!esAdmin) return;
+  renderTablaUsuarios();
+  renderResumenUsuarios();
+}
+
+function renderTablaUsuarios() {
+  const tbody = document.getElementById('tbody-usuarios');
+  if (!tbody) return;
+
+  tbody.innerHTML = Object.entries(usuariosMap).map(([uid, u]) => `
+    <tr>
+      <td>${u.email}</td>
+      <td><span class="badge ${u.rol === 'admin' ? 'badge-hi' : 'badge-ok'}">${u.rol}</span></td>
+      <td>
+        <button class="btn btn-clear" onclick="cambiarRolUsuario('${uid}', '${u.rol === 'admin' ? 'user' : 'admin'}')">
+          ${u.rol === 'admin' ? 'Quitar admin' : 'Hacer admin'}
+        </button>
+      </td>
+    </tr>
+  `).join('');
+}
+
+function renderResumenUsuarios() {
+  const tbody = document.getElementById('tbody-resumen');
+  if (!tbody) return;
+
+  const ahora = fechaLocalHoy().slice(0, 7);
+  const resumen = {};
+  Object.keys(usuariosMap).forEach(uid => { resumen[uid] = { mes: 0, total: 0 }; });
+
+  registros.forEach(r => {
+    if (!resumen[r.uid]) resumen[r.uid] = { mes: 0, total: 0 };
+    resumen[r.uid].total += (r.extras || 0);
+    if (r.fecha.startsWith(ahora)) resumen[r.uid].mes += (r.extras || 0);
+  });
+
+  tbody.innerHTML = Object.entries(resumen).map(([uid, val]) => `
+    <tr>
+      <td>${usuariosMap[uid]?.email || uid}</td>
+      <td>Q${val.mes.toFixed(2)}</td>
+      <td>Q${val.total.toFixed(2)}</td>
+    </tr>
+  `).join('');
+}
+
+// Cambia el rol de un usuario (admin <-> user) directamente desde la app
+async function cambiarRolUsuario(uid, nuevoRol) {
+  if (uid === currentUser.uid && nuevoRol !== 'admin') {
+    if (!confirm('Te vas a quitar el rol de administrador a ti mismo. ¿Continuar?')) return;
+  }
+  try {
+    await db.collection('usuarios').doc(uid).update({ rol: nuevoRol });
+    toast('Rol actualizado ✓', 'ok');
+    await cargarUsuarios();
+    if (uid === currentUser.uid) await cargarRol();
+  } catch (e) {
+    toast('Error al cambiar rol: ' + e.message, 'err');
+  }
+}
+
+// Crea un usuario nuevo (Auth + documento en Firestore) sin cerrar tu propia sesión de admin.
+// Usa una instancia "secundaria" de Firebase solo para este registro.
+async function crearUsuarioAdmin() {
+  const email = document.getElementById('nuevoUsuarioEmail').value.trim();
+  const pass  = document.getElementById('nuevoUsuarioPass').value;
+  const rol   = document.getElementById('nuevoUsuarioRol').value;
+
+  if (!email || !pass) { toast('Completa correo y contraseña.', 'err'); return; }
+  if (pass.length < 6) { toast('La contraseña debe tener al menos 6 caracteres.', 'err'); return; }
+
+  let secondaryApp;
+  try {
+    secondaryApp = firebase.initializeApp(firebaseConfig, 'Secundaria_' + Date.now());
+    const cred = await secondaryApp.auth().createUserWithEmailAndPassword(email, pass);
+    await db.collection('usuarios').doc(cred.user.uid).set({ email, rol });
+
+    toast('Usuario creado ✓', 'ok');
+    document.getElementById('nuevoUsuarioEmail').value = '';
+    document.getElementById('nuevoUsuarioPass').value = '';
+    await cargarUsuarios();
+  } catch (e) {
+    toast('Error al crear usuario: ' + e.message, 'err');
+  } finally {
+    if (secondaryApp) {
+      try { await secondaryApp.auth().signOut(); } catch (e) {}
+      try { await secondaryApp.delete(); } catch (e) {}
+    }
+  }
 }
