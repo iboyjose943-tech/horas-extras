@@ -457,8 +457,24 @@ function renderTablaUsuarios() {
           ${u.rol === 'admin' ? 'Quitar admin' : 'Hacer admin'}
         </button>
       </td>
+      <td>
+        <button class="btn btn-clear" onclick="enviarResetPassword('${u.email}')">
+          🔑 Restablecer contraseña
+        </button>
+      </td>
     </tr>
   `).join('');
+}
+
+// Envía un correo al usuario con un enlace para que él mismo cambie su contraseña
+async function enviarResetPassword(email) {
+  if (!confirm(`¿Enviar correo de restablecimiento de contraseña a ${email}?`)) return;
+  try {
+    await auth.sendPasswordResetEmail(email);
+    toast(`Correo enviado a ${email} ✓`, 'ok');
+  } catch (e) {
+    toast('Error al enviar correo: ' + e.message, 'err');
+  }
 }
 
 function renderResumenUsuarios() {
