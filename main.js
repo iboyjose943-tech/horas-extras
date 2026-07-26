@@ -104,6 +104,15 @@ async function cargarUsuarios() {
           .map(([uid, u]) => `<option value="${uid}" ${uid === currentUser.uid ? 'selected' : ''}>${u.email}</option>`)
           .join('');
       }
+
+      const selExp = document.getElementById('expedienteUsuario');
+      if (selExp) {
+        const actualExp = selExp.value;
+        selExp.innerHTML = Object.entries(usuariosMap)
+          .map(([uid, u]) => `<option value="${uid}" ${uid === actualExp ? 'selected' : ''}>${u.email}</option>`)
+          .join('');
+      }
+
       renderPanelAdmin();
     }
   } catch (e) {
@@ -149,6 +158,21 @@ function actualizarFiltroMeses() {
   const actual = sel.value;
   const meses  = [...new Set(registros.map(r => r.fecha.slice(0,7)))].sort().reverse();
   sel.innerHTML = '<option value="">Todos</option>' +
+    meses.map(m => {
+      const [y, mo] = m.split('-');
+      return `<option value="${m}" ${m === actual ? 'selected' : ''}>${MESES_NOM[+mo - 1]} ${y}</option>`;
+    }).join('');
+
+  poblarSelectExpedienteMes();
+}
+
+// Llena el selector de mes del panel "Generar expediente individual"
+function poblarSelectExpedienteMes() {
+  const sel = document.getElementById('expedienteMes');
+  if (!sel) return;
+  const actual = sel.value;
+  const meses  = [...new Set(registros.map(r => r.fecha.slice(0,7)))].sort().reverse();
+  sel.innerHTML = '<option value="">Todos los meses</option>' +
     meses.map(m => {
       const [y, mo] = m.split('-');
       return `<option value="${m}" ${m === actual ? 'selected' : ''}>${MESES_NOM[+mo - 1]} ${y}</option>`;
@@ -382,7 +406,7 @@ function cancelarEdicion() {
   document.getElementById('btnCancelarEdicion').style.display = 'none';
 }
 
-// ============ EXPORTAR EXCEL ============
+// ============ EXPORTAR EXCEL (todos los registros visibles) ============
 async function exportarExcel() {
   if (registros.length === 0) { toast('No hay registros para exportar.', 'err'); return; }
 
@@ -503,4 +527,86 @@ async function crearUsuarioAdmin() {
       try { await secondaryApp.delete(); } catch (e) {}
     }
   }
+}
+
+// ============ GENERAR EXPEDIENTE INDIVIDUAL (EXCEL) ============
+function generarExpedienteUsuario() {
+  if (!esAdmin) return;
+
+  const uid = document.getElementById('expedienteUsuario').value;
+  const mes = document.getElementById('expedienteMes').value;
+
+  if (!uid) { toast('Selecciona un usuario.', 'err'); return; }
+
+  const usuario = usuariosMap[uid];
+  let datosUsuario = registros.filter(r => r.uid === uid);
+  if (mes) datosUsuario = datosUsuario.filter(r => r.fecha.startsWith(mes));
+
+  if (datosUsuario.length === 0) {
+    toast('Este usuario no tiene registros' + (mes ? ' en el mes seleccionado.' : '.'), 'err');
+    return;
+  }
+
+  datosUsuario = [...datosUsuario].sort((a, b) => a.fecha.localeCompare(b.fecha));
+
+  // ---- Hoja "Detalle" ----
+  const detalle = datosUsuario.map(r => ({
+    Fecha: r.fecha,
+    Horas_Simples: r.horasSimples || 0,
+    Horas_Dobles:  r.horasDobles  || 0,
+    DS: r.ds || 0, DD: r.dd || 0,
+    NS: r.ns || 0, ND: r.nd || 0,
+    MS: r.ms || 0, MD: r.md || 0,
+    Total_Extras: +(r.extras || 0).toFixed(2),
+    Total_Pagar:  +(r.total  || 0).toFixed(2)
+  }));
+
+  // ---- Totales para "Resumen" ----
+  const sum = campo => datosUsuario.reduce((a, r) => a + (r[campo] || 0), 0);
+  const totDS = sum('ds'), totDD = sum('dd'), totNS = sum('ns');
+  const totND = sum('nd'), totMS = sum('ms'), totMD = sum('md');
+  const totExtras  = sum('extras');
+  const totPagar   = sum('total');
+  const totSimples = sum('horasSimples');
+  const totDobles  = sum('horasDobles');
+
+  const fechaInicio = datosUsuario[0].fecha;
+  const fechaFin    = datosUsuario[datosUsuario.length - 1].fecha;
+  const periodoTxt  = mes
+    ? (() => { const [y, mo] = mes.split('-'); return `${MESES_NOM[+mo - 1]} ${y}`; })()
+    : `${fechaInicio} a ${fechaFin}`;
+
+  const resumen = [
+    { Campo: 'Empleado',                Valor: usuario?.email || uid },
+    { Campo: 'Período',                 Valor: periodoTxt },
+    { Campo: 'Días registrados',        Valor: datosUsuario.length },
+    { Campo: '',                        Valor: '' },
+    { Campo: 'Horas Simples (DS+NS+MS)', Valor: totSimples },
+    { Campo: 'Horas Dobles (DD+ND+MD)', Valor: totDobles },
+    { Campo: '',                        Valor: '' },
+    { Campo: 'DS — Diurna Simple',      Valor: totDS },
+    { Campo: 'DD — Diurna Doble',       Valor: totDD },
+    { Campo: 'NS — Nocturna Simple',    Valor: totNS },
+    { Campo: 'ND — Nocturna Doble',     Valor: totND },
+    { Campo: 'MS — Mixta Simple',       Valor: totMS },
+    { Campo: 'MD — Mixta Doble',        Valor: totMD },
+    { Campo: '',                        Valor: '' },
+    { Campo: 'Sueldo Base',             Valor: `Q${SUELDO_BASE.toFixed(2)}` },
+    { Campo: 'Total Horas Extras',      Valor: `Q${totExtras.toFixed(2)}` },
+    { Campo: 'Total a Pagar (período)', Valor: `Q${totPagar.toFixed(2)}` },
+  ];
+
+  const wb = XLSX.utils.book_new();
+
+  const wsResumen = XLSX.utils.json_to_sheet(resumen, { skipHeader: true });
+  wsResumen['!cols'] = [{ wch: 38 }, { wch: 25 }];
+  XLSX.utils.book_append_sheet(wb, wsResumen, 'Resumen');
+
+  const wsDetalle = XLSX.utils.json_to_sheet(detalle);
+  wsDetalle['!cols'] = [{wch:12},{wch:14},{wch:14},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:6},{wch:14},{wch:14}];
+  XLSX.utils.book_append_sheet(wb, wsDetalle, 'Detalle');
+
+  const nombreArchivo = `Expediente_${(usuario?.email || uid).split('@')[0]}${mes ? '_' + mes : ''}.xlsx`;
+  XLSX.writeFile(wb, nombreArchivo);
+  toast('Expediente generado ✓', 'ok');
 }

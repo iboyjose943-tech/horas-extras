@@ -96,6 +96,23 @@
         <tbody id="tbody-resumen"></tbody>
       </table>
     </div>
+
+    <h3 style="margin-top:30px;margin-bottom:10px;font-size:.85rem;text-transform:uppercase;letter-spacing:1px;color:var(--muted);">Generar expediente individual</h3>
+    <div class="form-grid">
+      <div class="field">
+        <label>Usuario</label>
+        <select id="expedienteUsuario"></select>
+      </div>
+      <div class="field">
+        <label>Mes (opcional)</label>
+        <select id="expedienteMes">
+          <option value="">Todos los meses</option>
+        </select>
+      </div>
+      <div class="field" style="align-self:end;">
+        <button class="btn btn-excel" onclick="generarExpedienteUsuario()">⬇ Generar Expediente</button>
+      </div>
+    </div>
   </div>
 
   <div class="card">
